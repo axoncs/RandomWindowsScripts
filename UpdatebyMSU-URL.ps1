@@ -8,7 +8,35 @@
 
 & {
     $ErrorActionPreference = 'Stop'
-    $ProgressPreference    = 'SilentlyContinue'   # Invoke-WebRequest is very slow with the progress bar in PS 5.1
+
+    # Streams a URL to disk, printing a line every 10% (progress bars don't show in most remote shells,
+    # and Invoke-WebRequest's bar makes large downloads very slow in PS 5.1)
+    function Save-Url($url, $path) {
+        $sw  = [Diagnostics.Stopwatch]::StartNew()
+        $res = [Net.WebRequest]::Create($url).GetResponse()
+        $in  = $res.GetResponseStream()
+        $out = [IO.File]::Create($path)
+        try {
+            $total = $res.ContentLength
+            $buf   = New-Object byte[] 1MB
+            [long]$done = 0
+            $next  = 10
+            while (($n = $in.Read($buf, 0, $buf.Length)) -gt 0) {
+                $out.Write($buf, 0, $n)
+                $done += $n
+                if ($total -gt 0) {
+                    $pct = [math]::Floor($done * 100 / $total)
+                    if ($pct -ge $next) {
+                        Write-Host ('  {0,3}%  {1:N0} of {2:N0} MB' -f $pct, ($done / 1MB), ($total / 1MB))
+                        $next = $pct - ($pct % 10) + 10
+                    }
+                }
+            }
+        }
+        finally { $out.Dispose(); $in.Dispose(); $res.Dispose() }
+        if ($total -gt 0 -and $done -ne $total) { throw "Download incomplete: got $done of $total bytes" }
+        Write-Host ('  Downloaded {0:N0} MB in {1:N0}s' -f ($done / 1MB), $sw.Elapsed.TotalSeconds)
+    }
 
     $urls = @($u) | Where-Object { $_ }
     if (-not $urls) { throw 'Set $u to the update URL first, e.g. $u=''https://...msu'';irm a.xon.ac/update|iex' }
@@ -33,7 +61,7 @@
             if ($name -notmatch '\.(msu|cab)$') { throw "Not an .msu or .cab URL: $url" }
             $path = Join-Path $dir $name
             Write-Host "Downloading $name"
-            Invoke-WebRequest -Uri $url -OutFile $path -UseBasicParsing
+            Save-Url $url $path
             $path
         }
 

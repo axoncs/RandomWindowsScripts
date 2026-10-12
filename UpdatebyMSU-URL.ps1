@@ -75,6 +75,9 @@
 
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
+    # 32-bit PowerShell (some RMM agents) gets redirected to the 32-bit dism.exe, which can't service 64-bit Windows
+    $sys32 = if ([Environment]::Is64BitOperatingSystem -and -not [Environment]::Is64BitProcess) { "$env:SystemRoot\Sysnative" } else { "$env:SystemRoot\System32" }
+
     $dir = Join-Path $env:SystemRoot 'Temp\MSU'
     Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
     New-Item $dir -ItemType Directory -Force | Out-Null
@@ -101,7 +104,7 @@
             }
 
             Write-Host "Installing $name"
-            $out  = & dism.exe /Online /Add-Package "/PackagePath:$file" /NoRestart /Quiet
+            $out  = & "$sys32\dism.exe" /Online /Add-Package "/PackagePath:$file" /NoRestart /Quiet
             $code = $LASTEXITCODE
             $logs = 'C:\Windows\Logs\DISM\dism.log'
             if ($code -eq 50 -and $file -like '*.msu') {

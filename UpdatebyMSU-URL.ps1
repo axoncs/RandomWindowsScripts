@@ -2,6 +2,7 @@
 #
 # Usage:     $u='https://.../windows11.0-kb5xxxxxx-x64_....msu';irm a.xon.ac/update|iex
 # Multiple:  $u='url1','url2';irm a.xon.ac/update|iex   (installed in the order given)
+# Or set the MSUurl environment variable instead of $u (several URLs: separate with commas)
 #
 # Must run elevated (Administrator or SYSTEM). Works over PSRemoting.
 # Restarts automatically (60 s countdown) if an update needs it; cancel with: shutdown /a
@@ -62,8 +63,10 @@
         finally { Unregister-ScheduledTask -TaskName $task -Confirm:$false }
     }
 
+    # $u from the caller, else the MSUurl environment variable (several URLs separated by commas or spaces)
     $urls = @($u) | Where-Object { $_ }
-    if (-not $urls) { throw 'Set $u to the update URL first, e.g. $u=''https://...msu'';irm a.xon.ac/update|iex' }
+    if (-not $urls -and $env:MSUurl) { $urls = $env:MSUurl -split '[,;\s]+' | Where-Object { $_ } }
+    if (-not $urls) { throw 'Set $u or $env:MSUurl to the update URL first, e.g. $u=''https://...msu'';irm a.xon.ac/update|iex' }
 
     $id = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
     if (-not $id.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
